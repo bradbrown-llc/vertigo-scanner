@@ -1,5 +1,5 @@
 import { LogLevel } from '../types/mod.ts'
-import { Logger } from '../classes/mod.ts'
+import { Logger, Cache } from '../classes/mod.ts'
 import { kv, kvRlb as rlb } from './mod.ts'
 
 export async  function kvGetMany<
@@ -10,16 +10,19 @@ export async  function kvGetMany<
 
     const getMany = kv.getMany<T>
 
-    Logger.debug(`kvGet: keys ${keys} request sent`)
+    Logger.detail(`kvGet: keys [${keys.map(key => `[${key}]`)}] request sent`)
+
+    rlb.delay = await Cache.get('kvRlbDelay')
+    rlb.lim = await Cache.get('kvRlbLim')
 
     const result = await Logger.wrap(
         // ts error due to below, but i respectfully disagree
         // Awaited<{ [P in ...] }> != { P in ... }
         // @ts-ignore 1
         rlb.regulate({ fn: getMany.bind(kv), args: [keys] as const }),
-        `kvGet: keys ${keys} request failure`,
+        `kvGet: keys [${keys.map(key => `[${key}]`)}] request failure`,
         LogLevel.DETAIL,
-        `kvGet: keys ${keys} request success`
+        `kvGet: keys [${keys.map(key => `[${key}]`)}] request success`
     )
 
     if (result === null) return null

@@ -1,18 +1,27 @@
-import { Chain } from './mod.ts'
-import { kvGet, kvSet, machineId } from '../lib/mod.ts'
+import { KvFilter, LogLevel } from '../types/mod.ts'
+import { Chain, Logger, Cache } from './mod.ts'
+import { kv, kvGet, kvRlb as rlb, machineId } from '../lib/mod.ts'
 
 export class Filter {
 
     fromBlock:bigint
     toBlock:bigint
+    kvEntry:Deno.KvEntryMaybe<KvFilter>
 
-    constructor(filter?:{ fromBlock:bigint, toBlock:bigint }) {
+    constructor({
+        filter, kvEntry
+    }:{ 
+        filter?:{ fromBlock:bigint, toBlock:bigint }
+        kvEntry:Deno.KvEntryMaybe<KvFilter>   
+    }) {
 
         // set the fromBlock to the filter object's, or 0n if no given filter
         this.fromBlock = filter ? filter.fromBlock : 0n
 
         // set the fromBlock to the filter object's, or -1n if no given filter
         this.toBlock = filter ? filter.toBlock : -1n
+
+        this.kvEntry = kvEntry
 
     }
 
@@ -21,10 +30,31 @@ export class Filter {
      */
     get width():bigint { return this.toBlock - this.fromBlock + 1n }
 
-    async update(chain:Chain):Promise<void> {
+    async update(chain:Chain):Promise<boolean|null> {
 
-        // make an attempt to upate the filter
-        await kvSet(['filters', chain.chainId, machineId], this)
+        const atom = kv.atomic()
+
+        const commit = atom
+            .check(this.kvEntry)
+            .set(['filters', chain.chainId, machineId], this)
+            .commit
+        
+        // attempt the commit
+        Logger.detail(`Filter: chain ${chain.chainId} update request`)
+        rlb.delay = await Cache.get('kvRlbDelay')
+        rlb.lim = await Cache.get('kvRlbLim')
+        const result = await Logger.wrap(
+            rlb.regulate({ fn: commit.bind(atom), args: [] }),
+            `Filter: chain ${chain.chainId} update request failure`,
+            LogLevel.DETAIL,
+            `Filter: chain ${chain.chainId} update request success`
+        )
+
+        // return null if above request fails
+        if (result === null) return null
+        
+        // return whether or not the commit succeeded
+        return result.ok
 
     }
 
@@ -47,24 +77,18 @@ export class Filter {
 
     }
 
-    async bisect(chain:Chain):Promise<void> {
+    bisect():void {
 
         // halve the width of the filter while keeping fromBlock the same
         this.toBlock = this.fromBlock + (this.toBlock - this.fromBlock) / 2n
 
-        // update the filter
-        await this.update(chain)
-
     }
 
-    async bump(chain:Chain):Promise<void> {
+    bump():void {
 
         // move the filter forward
         // doing this will force the scanner to get the current height
         this.fromBlock = this.toBlock + 1n
-
-        // update the filter
-        await this.update(chain)
 
     }
 

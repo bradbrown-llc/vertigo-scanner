@@ -1,10 +1,13 @@
-import { CacheEntry, LogLevel } from '../types/mod.ts'
-import { Logger } from './mod.ts'
-import { machineId, kv, kvRlb as rlb } from '../lib/mod.ts'
+import { CacheEntry, KvCacheEntry, LogLevel } from '../types/mod.ts'
+import { machineId, kvSet, kvGet } from '../lib/mod.ts'
 
 type CacheKeys = 
      'level'
     |'delay'
+    |'kvRlbDelay'
+    |'kvRlbLim'
+    |'evmRlbDelay'
+    |'evmRlbLim'
 
 export class Cache {
 
@@ -13,7 +16,7 @@ export class Cache {
         value: LogLevel.DEBUG,
         timestamp: Date.now(),
         expireIn: 30000,
-        kvKey: ['logLevel', machineId] as const,
+        kvKey: ['level', machineId] as const,
         gate: null
     }
 
@@ -22,7 +25,43 @@ export class Cache {
         value: 5000,
         timestamp: Date.now(),
         expireIn: 30000,
-        kvKey: ['scanInterval', machineId] as const,
+        kvKey: ['delay', machineId] as const,
+        gate: null
+    }
+    
+    // kv rlb delay
+    static kvRlbDelay:CacheEntry<number> = {
+        value: 500,
+        timestamp: Date.now(),
+        expireIn: 30000,
+        kvKey: ['kvRlbDelay', machineId] as const,
+        gate: null
+    }
+    
+    // kv rlb lim
+    static kvRlbLim:CacheEntry<number> = {
+        value: 1,
+        timestamp: Date.now(),
+        expireIn: 30000,
+        kvKey: ['kvRlbLim', machineId] as const,
+        gate: null
+    }
+    
+    // evm rlb delay
+    static evmRlbDelay:CacheEntry<number> = {
+        value: 500,
+        timestamp: Date.now(),
+        expireIn: 30000,
+        kvKey: ['evmRlbDelay', machineId] as const,
+        gate: null
+    }
+    
+    // evm rlb lim
+    static evmRlbLim:CacheEntry<number> = {
+        value: 1,
+        timestamp: Date.now(),
+        expireIn: 30000,
+        kvKey: ['evmRlbLim', machineId] as const,
         gate: null
     }
 
@@ -34,6 +73,8 @@ export class Cache {
 
         // get the memory cache entry
         const memCacheEntry = Cache[key] 
+
+        if (!memCacheEntry) throw new Error(`cache key ${key} does not exist`)
 
         // if memory cache entry is not expired, return it
         if (Date.now() < Cache[key].timestamp + Cache[key].expireIn) return Cache[key].value
@@ -48,22 +89,16 @@ export class Cache {
             const gate = Promise.withResolvers<void>()
             Cache[key].gate = gate
 
-            // attempt to get the KV equivalent entry
-            Logger.detail(`Cache: fetching ${key} data from kv`)
-            const get = kv.get<CacheEntry<typeof memCacheEntry.value>>
-            const kvCacheEntry = await Logger.wrap(
-                rlb.regulate({
-                    fn: get.bind(kv),
-                    args: [Cache[key].kvKey] as const
-                }),
-                `Cache: failed to fetch ${key} data from kv`,
-                LogLevel.DETAIL, `Cache: successfully fetched ${key} data from kv`)
+            // attempt to get the KV equivalent cache object
+            const kvCacheObject = await kvGet<KvCacheEntry<typeof memCacheEntry.value>>(Cache[key].kvKey)
             
             // on success, update the memory entry with the KV entry with an updated timestamp
-            if (kvCacheEntry?.value) {
-                Cache[key] = kvCacheEntry.value
-                Cache[key].timestamp = Date.now()
+            if (kvCacheObject) {
+                Cache[key].value = kvCacheObject.value
+                Cache[key].expireIn = kvCacheObject.expireIn
             }
+
+            Cache[key].timestamp = Date.now()
 
             // resolve and nullify the previously set gate
             Cache[key].gate = null
@@ -84,16 +119,13 @@ export class Cache {
     >(key:K, value:V) {
 
         Cache[key].value = value
+
         Cache[key].timestamp = Date.now()
-        const set = kv.set
-        Logger.detail(`Cache: setting key ${key} to value ${value}`)
-        await Logger.wrap(
-            rlb.regulate({
-                fn: set.bind(kv),
-                args: [Cache[key].kvKey, Cache[key]] as const
-            }),
-            `Cache: failed setting key ${key} to value ${value}`,
-            LogLevel.DETAIL, `Cache: successfully set key ${key} to value ${value}`)
+
+        await kvSet(Cache[key].kvKey, {
+            value: Cache[key].value,
+            expireIn: Cache[key].expireIn
+        })
 
     }
 

@@ -1,8 +1,8 @@
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts'
 import * as ejra from 'https://deno.land/x/ejra@0.2.1/mod.ts'
 import { KvBurn, LogLevel } from '../types/mod.ts'
-import { Chain, Logger } from '../classes/mod.ts'
-import { kv } from '../lib/mod.ts'
+import { Cache, Chain, Logger } from '../classes/mod.ts'
+import { kv, kvRlb as rlb } from '../lib/mod.ts'
 import { machineId } from '../lib/machineId.ts';
 
 type Event = { log: ejra.types.Log, chain:Chain }
@@ -40,7 +40,7 @@ export class Burn {
                 z.string().transform(s => BigInt('0x'+s))
             ]).parse(bar.log.data.substring(2).match(/.{64}/g))
 
-            this.destination = new Chain(destinationChainId)
+            this.destination = new Chain({ chainId: destinationChainId })
             this.recipient = recipient
             this.value = value
 
@@ -48,8 +48,8 @@ export class Burn {
 
             this.hash = bar.hash
             this.id = this.hash.slice(-8)
-            this.source = new Chain(bar.source)
-            this.destination = new Chain(bar.destination)
+            this.source = new Chain({ chainId: bar.source })
+            this.destination = new Chain({ chainId: bar.destination })
             this.recipient = bar.recipient
             this.value = bar.value
             this.log = bar.log
@@ -80,8 +80,10 @@ export class Burn {
 
         // attempt the commit
         Logger.detail(`Burn: requesting claim for burn ${this.id}`)
+        rlb.delay = await Cache.get('kvRlbDelay')
+        rlb.lim = await Cache.get('kvRlbLim')
         const result = await Logger.wrap(
-            commit.bind(atom)(),
+            rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Burn: request to claim burn ${this.id} failure`,
             LogLevel.DETAIL,
             `Burn: request to claim burn ${this.id} returned`
@@ -110,8 +112,10 @@ export class Burn {
 
         // attempt the commit
         Logger.detail(`Burn: requesting unclaim for burn ${this.id}`)
+        rlb.delay = await Cache.get('kvRlbDelay')
+        rlb.lim = await Cache.get('kvRlbLim')
         const result = await Logger.wrap(
-            commit.bind(atom)(),
+            rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Burn: request to unclaim burn ${this.id} failure`,
             LogLevel.DETAIL,
             `Burn: request to unclaim burn ${this.id} returned`
@@ -142,8 +146,10 @@ export class Burn {
 
         // attempt the commit
         Logger.detail(`Burn: requesting to set burn ${this.id} to ${state}`)
+        rlb.delay = await Cache.get('kvRlbDelay')
+        rlb.lim = await Cache.get('kvRlbLim')
         const result = await Logger.wrap(
-            commit.bind(atom)(),
+            rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Burn: request to set burn ${this.id} to ${state} did not return`,
             LogLevel.DETAIL,
             `Burn: request to set burn ${this.id} to ${state} returned`

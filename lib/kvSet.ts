@@ -1,18 +1,23 @@
 import { LogLevel } from '../types/mod.ts'
-import { Logger } from '../classes/mod.ts'
+import { Logger, Cache } from '../classes/mod.ts'
 import { kv, kvRlb as rlb } from './mod.ts'
 
-export async  function kvSet<T>(key:Deno.KvKey, value:T):Promise<true|null> {
+const replacer=(_:unknown,v:unknown)=>typeof v=='bigint'?''+v:v
+
+export async function kvSet<T>(key:Deno.KvKey, value:T):Promise<true|null> {
 
     const set = kv.set
 
-    Logger.detail(`kvSet: key ${key} value ${value} set request sent`)
+    Logger.detail(`kvSet: key [${key}] value ${JSON.stringify(value, replacer)} set request sent`)
+    
+    rlb.delay = await Cache.get('kvRlbDelay')
+    rlb.lim = await Cache.get('kvRlbLim')
 
     const result = await Logger.wrap(
         rlb.regulate({ fn: set.bind(kv), args: [key, value] as const }),
-        `kvSet: key ${key} value ${value} set failure`,
+        `kvSet: key [${key}] value ${JSON.stringify(value, replacer)} set failure`,
         LogLevel.DETAIL,
-        `kvSet: key ${key} value ${value} set success`
+        `kvSet: key [${key}] value ${JSON.stringify(value, replacer)} set success`
     )
 
     return result?.ok ?? null

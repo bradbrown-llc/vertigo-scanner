@@ -41,7 +41,7 @@ export class Logger {
         return await promise
             .then(async value => {
                 // info, debug, or detail?
-                if (await Cache.get('logLevel') >= level)
+                if (await Cache.get('level') >= level)
                     switch (LogLevel[level]) {
                         case 'INFO': this.info(successMessage); break
                         case 'DEBUG': this.debug(successMessage); break
@@ -64,7 +64,7 @@ export class Logger {
     static async error({
         message, reason
     }:AtLeastOne<{ message:string, reason:unknown }>) {
-        if (await Cache.get('logLevel') >= LogLevel.ERROR) {
+        if (await Cache.get('level') >= LogLevel.ERROR) {
             if (message) console.error(
                  `${'ERROR'.padEnd(6, ' ')
                 } ${logstamp()
@@ -78,8 +78,22 @@ export class Logger {
      * Logs an error if the logLevel is >= LogLevel.INFO
      * @param message 
      */
+    static async warn(message:string) {
+        if (await Cache.get('level') >= LogLevel.WARN) {
+            console.log(
+                 `${'WARN'.padEnd(6, ' ')
+                } ${logstamp()
+                } ${message}`
+            )
+        }
+    }
+
+    /**
+     * Logs an error if the logLevel is >= LogLevel.INFO
+     * @param message 
+     */
     static async info(message:string) {
-        if (await Cache.get('logLevel') >= LogLevel.INFO) {
+        if (await Cache.get('level') >= LogLevel.INFO) {
             console.log(
                  `${'INFO'.padEnd(6, ' ')
                 } ${logstamp()
@@ -93,7 +107,7 @@ export class Logger {
      * @param message 
      */
     static async debug(message:string) {
-        if (await Cache.get('logLevel') >= LogLevel.DEBUG) {
+        if (await Cache.get('level') >= LogLevel.DEBUG) {
             console.log(
                  `${'DEBUG'.padEnd(6, ' ')
                 } ${logstamp()
@@ -107,7 +121,7 @@ export class Logger {
      * @param message 
      */
     static async detail(message:string) {
-        if (await Cache.get('logLevel') >= LogLevel.DETAIL) {
+        if (await Cache.get('level') >= LogLevel.DETAIL) {
             console.log(
                  `${'DETAIL'.padEnd(6, ' ')
                 } ${logstamp()
