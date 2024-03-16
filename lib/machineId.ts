@@ -1,0 +1,1 @@
+export const machineId = Deno.env.get('MACHINE_ID') as string
