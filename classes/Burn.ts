@@ -1,9 +1,13 @@
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts'
 import * as ejra from 'https://deno.land/x/ejra@0.2.1/mod.ts'
-import { Chain, LogLevel } from '../types/mod.ts'
-import { Logger } from './mod.ts'
-import { kv, kvRlb as rlb, machineId, parseBurnData } from '../lib/mod.ts'
+import { KvBurn, LogLevel } from '../types/mod.ts'
+import { Chain, Logger } from '../classes/mod.ts'
+import { kv } from '../lib/mod.ts'
+import { machineId } from '../lib/machineId.ts';
 
-type BurnState = 'archive'|'hold'|'processing'
+type Event = { log: ejra.types.Log, chain:Chain }
+type EventOrKvBurn = Event|KvBurn
+type BurnState = 'archive'|'finalizable'|'finalized'
 
 /**
  * Burn class. Has utilities and functions for working with burn events
@@ -11,107 +15,172 @@ type BurnState = 'archive'|'hold'|'processing'
  */
 export class Burn {
 
+    id:string
     hash:string
-    height:bigint
-    sourceChainId:bigint
-    destinationChainId:bigint
+    source:Chain
+    destination:Chain
     recipient:string
     value:bigint
+    log:ejra.types.Log
 
-    constructor({
-        hash, height, sourceChainId, destinationChainId, recipient, value
-    }:{
-        hash:string
-        height:bigint
-        sourceChainId:bigint
-        destinationChainId:bigint
-        recipient:string
-        value:bigint
-    }) {
-        this.hash = hash
-        this.height = height
-        this.sourceChainId = sourceChainId
-        this.destinationChainId = destinationChainId
-        this.recipient = recipient
-        this.value = value
-    }
+    constructor(kvBurn:KvBurn)
+    constructor(foo:Event)
+    constructor(bar:EventOrKvBurn) {
 
-    /**
-     * Convert an object with a log and a chain into a Burn
-     */
-    static from({ log, chain }:{ log:ejra.types.Log, chain:Chain }) {
-        const { transactionHash:hash, blockNumber:height } = log
-        const { chainId:sourceChainId } = chain
-        const { destinationChainId, recipient, value } = parseBurnData(log)
-        return new Burn({ hash, height, sourceChainId, destinationChainId, recipient, value })
-    }
+        if ('chain' in bar) {
 
-    /**
-     * Move this burn from one state to another
-     */
-    async moveState({
-        from, to
-    }:{
-        from:BurnState|null
-        to:BurnState|null
-    }) {
+            this.hash = bar.log.transactionHash
+            this.id = this.hash.slice(-8)
+            this.source = bar.chain
+            this.log = bar.log
 
-        const { sourceChainId:chainId, hash } = this
-        
-        const keys = [
-            ['archive', chainId, hash],
-            ['hold', chainId, hash],
-            ['processing', chainId, hash],
-            ['machine', machineId, chainId, hash],
-            ['sent', chainId, hash],
-            ['done', chainId, hash]
-        ] as const
+            const [destinationChainId, recipient, value] = z.tuple([
+                z.string().transform(s => BigInt('0x'+s)),
+                z.string().transform(s => s.substring(24)),
+                z.string().transform(s => BigInt('0x'+s))
+            ]).parse(bar.log.data.substring(2).match(/.{64}/g))
 
-        const notFromKeys = from === null ? keys : keys.filter(key => !key.includes(from))
-        const fromKey = from === null ? null : keys.find(key => key.includes(from))
-        const toKey = to === null ? null : keys.find(key => key.includes(to))
+            this.destination = new Chain(destinationChainId)
+            this.recipient = recipient
+            this.value = value
 
-        const atom = kv.atomic()
-            .check(...notFromKeys.map(key => ({ key, versionstamp: null })))
-        if (fromKey) atom.delete(fromKey)
-        if (fromKey?.[0] == 'processing') atom.delete(keys[3])
-        if (toKey) atom.set(toKey, this)
-        if (toKey?.[0] == 'processing') atom.set(keys[3], this)
-        const commit = atom.commit
-        const result = await Logger.wrap(
-            rlb.regulate({ fn: commit.bind(atom), args: [] }),
-            `Burn: burn ${this.hash.slice(-8)} state move from ${from} to ${to} failed`,
-            LogLevel.DEBUG, `Burn: burn ${this.hash.slice(-8)} state moved from ${from} to ${to}`)
+        } else {
 
-        // return whether or not the state transition succeeded
-        return result?.ok ?? false
+            this.hash = bar.hash
+            this.id = this.hash.slice(-8)
+            this.source = new Chain(bar.source)
+            this.destination = new Chain(bar.destination)
+            this.recipient = bar.recipient
+            this.value = bar.value
+            this.log = bar.log
 
-    }
-
-    /**
-     * Return an AsyncIterator for burns in the specified state
-     */
-    static iterate(state:BurnState) {
-
-        const asyncIterator = {
-            i: 0,
-            list: kv.list<Burn>({ prefix: [state] }),
-            async next():Promise<IteratorResult<Burn>> {
-                Logger.debug(`Burn: pulling burn from ${state}, iteration ${this.i}`)
-                const result = await Logger.wrap(
-                    rlb.regulate({ fn: this.list.next.bind(this.list), args: [] }),
-                    `Burn: burn state ${state} pull request failed, iteration ${this.i}`,
-                    LogLevel.DEBUG, `Burn: burn state ${state} pull request successful, iteration ${this.i}`)
-                if (!result || result.done) return { done: true, value: null }
-                const kvEntry = result.value
-                const burn = new Burn(kvEntry.value)
-                return { value: burn }
-            },
-            [Symbol.asyncIterator]() { return asyncIterator }
         }
 
-        return asyncIterator
+    }
+
+    async claim():Promise<boolean|null> {
+
+        // create atom
+        const atom = kv.atomic()
+
+        // create claim commit
+        const commit = atom
+            // make sure KvBurn doesn't exist and isn't being processed
+            .check(
+                { key: ['processing', machineId, this.hash], versionstamp: null },
+                { key: ['archive', 'burn', this.source.chainId, this.hash], versionstamp: null },
+                { key: ['finalizable', 'burn', this.source.chainId, this.hash], versionstamp: null },
+                { key: ['finalized', 'burn', this.source.chainId, this.hash], versionstamp: null },
+            )
+            // track this burn
+            .set(['processing', machineId, this.hash], true)
+            // mark burn as processing
+            .set(['processing', this.hash], machineId)
+            .commit
+
+        // attempt the commit
+        Logger.detail(`Burn: requesting claim for burn ${this.id}`)
+        const result = await Logger.wrap(
+            commit.bind(atom)(),
+            `Burn: request to claim burn ${this.id} failure`,
+            LogLevel.DETAIL,
+            `Burn: request to claim burn ${this.id} returned`
+        )
+
+        // return null if above request fails
+        if (result === null) return null
+        
+        // return whether or not the commit succeeded
+        return result.ok
 
     }
+
+    async unclaim():Promise<boolean|null> {
+
+        // create atom
+        const atom = kv.atomic()
+
+        // create unclaim commit
+        const commit = atom
+            // stop tracking this burn
+            .delete(['processing', machineId, this.hash])
+            // unmark burn as processing
+            .delete(['processing', this.hash])
+            .commit
+
+        // attempt the commit
+        Logger.detail(`Burn: requesting unclaim for burn ${this.id}`)
+        const result = await Logger.wrap(
+            commit.bind(atom)(),
+            `Burn: request to unclaim burn ${this.id} failure`,
+            LogLevel.DETAIL,
+            `Burn: request to unclaim burn ${this.id} returned`
+        )
+
+        // return null if above request fails
+        if (result === null) return null
+        
+        // return whether or not the commit succeeded
+        return result.ok
+
+    }
+
+    async set(state:BurnState):Promise<boolean|null> {
+
+        // create atom
+        const atom = kv.atomic()
+
+        // create commit
+        const commit = atom
+            // stop tracking this burn
+            .delete(['processing', machineId, this.hash])
+            // mark as no longer being processed
+            .delete(['processing', this.hash])
+            // put the burn in the specified state
+            .set([state, 'burn', this.source.chainId, this.hash], this)
+            .commit
+
+        // attempt the commit
+        Logger.detail(`Burn: requesting to set burn ${this.id} to ${state}`)
+        const result = await Logger.wrap(
+            commit.bind(atom)(),
+            `Burn: request to set burn ${this.id} to ${state} did not return`,
+            LogLevel.DETAIL,
+            `Burn: request to set burn ${this.id} to ${state} returned`
+        )
+
+        // return null if above request fails
+        if (result === null) return null
+        
+        // return whether or not the commit succeeded
+        return result.ok
+
+    }
+
+    // /**
+    //  * Return an AsyncIterator for burns in the specified state
+    //  */
+    // static iterate(state:BurnState) {
+
+    //     const asyncIterator = {
+    //         i: 0,
+    //         list: kv.list<Burn>({ prefix: [state] }),
+    //         async next():Promise<IteratorResult<Burn>> {
+    //             Logger.debug(`Burn: pulling burn from ${state}, iteration ${this.i}`)
+    //             const result = await Logger.wrap(
+    //                 rlb.regulate({ fn: this.list.next.bind(this.list), args: [] }),
+    //                 `Burn: burn state ${state} pull request failed, iteration ${this.i}`,
+    //                 LogLevel.DEBUG, `Burn: burn state ${state} pull request successful, iteration ${this.i}`)
+    //             if (!result || result.done) return { done: true, value: null }
+    //             const kvEntry = result.value
+    //             const burn = new Burn(kvEntry.value)
+    //             return { value: burn }
+    //         },
+    //         [Symbol.asyncIterator]() { return asyncIterator }
+    //     }
+
+    //     return asyncIterator
+
+    // }
 
 }

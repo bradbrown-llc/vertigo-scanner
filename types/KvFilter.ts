@@ -1,4 +1,4 @@
-export type Filter = {
+export type KvFilter = {
     fromBlock:bigint
     toBlock:bigint
 }

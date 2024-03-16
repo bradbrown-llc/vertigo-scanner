@@ -3,14 +3,13 @@ import { Logger } from './mod.ts'
 import { machineId, kv, kvRlb as rlb } from '../lib/mod.ts'
 
 type CacheKeys = 
-    'logLevel'
-    |'maxProcessing'
-    |'pullThreshold'
-    |'pullInterval'
+     'level'
+    |'delay'
 
 export class Cache {
 
-    static logLevel:CacheEntry<LogLevel> = {
+    // log level
+    static level:CacheEntry<LogLevel> = {
         value: LogLevel.DEBUG,
         timestamp: Date.now(),
         expireIn: 30000,
@@ -18,27 +17,12 @@ export class Cache {
         gate: null
     }
 
-    static maxProcessing:CacheEntry<number> = {
-        value: 10,
-        timestamp: Date.now(),
-        expireIn: 30000,
-        kvKey: ['maxProcessing', machineId] as const,
-        gate: null
-    }
-
-    static pullThreshold:CacheEntry<number> = {
-        value: 0.5,
-        timestamp: Date.now(),
-        expireIn: 30000,
-        kvKey: ['pullThreshold', machineId] as const,
-        gate: null
-    }
-
-    static pullInterval:CacheEntry<number> = {
+    // main loop delay
+    static delay:CacheEntry<number> = {
         value: 5000,
         timestamp: Date.now(),
         expireIn: 30000,
-        kvKey: ['pullInterval', machineId] as const,
+        kvKey: ['scanInterval', machineId] as const,
         gate: null
     }
 

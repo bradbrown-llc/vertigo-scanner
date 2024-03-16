@@ -1,18 +1,39 @@
-import { Burn } from './classes/mod.ts'
-import { getStalestChain, vouchFilter, getLogs } from './lib/mod.ts'
+import { Chain, Burn, Cache } from './classes/mod.ts'
+import { sleep } from './lib/mod.ts'
 
 while (true) {
 
-    const chain = await getStalestChain()
+    // get stalest chain or continue
+    const chain = await Chain.stalest()
     if (!chain) continue
 
-    if (!await vouchFilter(chain)) continue
-
-    const logs = await getLogs(chain)
+    // get logs or continue
+    const logs = await chain.logs()
     if (!logs) continue
 
-    const burns = await Burn.from(logs)
+    // for each log
+    logs.forEach(async log => {
 
-    for (const burn of burns) await burn.moveState({ to: 'hold' })
+        // create a burn
+        const burn = new Burn({ chain, log })
+
+        // try to claim the burn, return
+        if (!await burn.claim()) return
+
+        // check if the burn's destination chain is active
+        const active = await burn.destination.active()
+        
+        // if it isn't, archive the burn
+        if (active === false) await burn.set('archive')
+
+        // if it is, mark the burn as finalizable
+        if (active === true) await burn.set('finalizable')
+
+        // unclaim the burn
+        await burn.unclaim()
+
+    })
+
+    await sleep(await Cache.get('delay'))
 
 }

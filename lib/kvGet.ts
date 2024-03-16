@@ -2,7 +2,7 @@ import { LogLevel } from '../types/mod.ts'
 import { Logger } from '../classes/mod.ts'
 import { kv, kvRlb as rlb } from './mod.ts'
 
-export async  function kvGet<T>(key:Deno.KvKey):Promise<T|null> {
+export async  function kvGet<T>(key:Deno.KvKey):Promise<T|null|undefined> {
 
     const get = kv.get<T>
 
@@ -15,6 +15,10 @@ export async  function kvGet<T>(key:Deno.KvKey):Promise<T|null> {
         `kvGet: key ${key} request success`
     )
 
-    return result?.value ?? null
+    if (result === null) return null
+    
+    if (result.value === null) return undefined
+
+    return result.value
 
 }
