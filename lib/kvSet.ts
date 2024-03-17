@@ -8,10 +8,10 @@ export async function kvSet<T>(key:Deno.KvKey, value:T):Promise<true|null> {
 
     const set = kv.set
 
-    Logger.detail(`kvSet: key [${key}] value ${JSON.stringify(value, replacer)} set request sent`)
-    
     rlb.delay = await Cache.get('kvRlbDelay')
     rlb.lim = await Cache.get('kvRlbLim')
+
+    await Logger.detail(`kvSet: sending KV set request key [${key}] value ${JSON.stringify(value, replacer)}`)
 
     const result = await Logger.wrap(
         rlb.regulate({ fn: set.bind(kv), args: [key, value] as const }),

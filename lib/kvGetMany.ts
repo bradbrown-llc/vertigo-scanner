@@ -10,11 +10,12 @@ export async  function kvGetMany<
 
     const getMany = kv.getMany<T>
 
-    Logger.detail(`kvGet: keys [${keys.map(key => `[${key}]`)}] request sent`)
-
+    
     rlb.delay = await Cache.get('kvRlbDelay')
     rlb.lim = await Cache.get('kvRlbLim')
 
+    await Logger.detail(`kvGet: sending kvGetMany request, keys [${keys.map(key => `[${key}]`)}]`)
+    
     const result = await Logger.wrap(
         // ts error due to below, but i respectfully disagree
         // Awaited<{ [P in ...] }> != { P in ... }

@@ -79,9 +79,12 @@ export class Burn {
             .commit
 
         // attempt the commit
-        Logger.detail(`Burn: requesting claim for burn ${this.id}`)
+
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+        
+        await Logger.detail(`Burn: requesting claim for burn ${this.id}`)
+
         const result = await Logger.wrap(
             rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Burn: request to claim burn ${this.id} failure`,
@@ -111,9 +114,12 @@ export class Burn {
             .commit
 
         // attempt the commit
-        Logger.detail(`Burn: requesting unclaim for burn ${this.id}`)
+
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+        
+        await Logger.detail(`Burn: requesting unclaim for burn ${this.id}`)
+
         const result = await Logger.wrap(
             rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Burn: request to unclaim burn ${this.id} failure`,
@@ -145,9 +151,12 @@ export class Burn {
             .commit
 
         // attempt the commit
-        Logger.detail(`Burn: requesting to set burn ${this.id} to ${state}`)
+
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+
+        await Logger.detail(`Burn: sending request to set burn ${this.id} to ${state}`)
+
         const result = await Logger.wrap(
             rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Burn: request to set burn ${this.id} to ${state} did not return`,

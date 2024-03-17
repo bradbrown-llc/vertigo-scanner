@@ -6,10 +6,13 @@ export async function kvGet<T>(key:Deno.KvKey):Promise<T|null|undefined> {
 
     const get = kv.get<T>
 
-    Logger.detail(`kvGet: key [${key}] request sent`)
-
+    console.log('#x')
     rlb.delay = await Cache.get('kvRlbDelay')
+    console.log('#y')
     rlb.lim = await Cache.get('kvRlbLim')
+    console.log('#z')
+
+    await Logger.detail(`kvGet: sending key [${key}] request`)
 
     const result = await Logger.wrap(
         rlb.regulate({ fn: get.bind(kv), args: [key] as const }),

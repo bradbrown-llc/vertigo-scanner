@@ -83,9 +83,12 @@ export class Chain {
 
         // try to get the filter object for this chain and machine
         const get = kv.get<KvFilter>
-        Logger.detail(`Chain: chain ${this.chainId} filter request`)
+
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+        
+        await Logger.detail(`Chain: sending chain ${this.chainId} filter request`)
+
         const kvEntry = await Logger.wrap(
             rlb.regulate({
                 fn: get.bind(kv),
@@ -108,8 +111,12 @@ export class Chain {
         // if the filter is at least one block wide, return it
         if (filter.width > 0n) return filter
 
+        console.log('#a')
+
         // otherwise, get the current height of the chain
         const height = await this.height()
+
+        console.log('#a')
 
         // if that failed, return null, we cannot determine a filter
         if (!height) return null
@@ -147,9 +154,12 @@ export class Chain {
             .commit
             
         // attempt the commit
-        Logger.detail(`Chain: chain ${this.chainId} update request`)
+
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+        
+        await Logger.detail(`Chain: sending chain ${this.chainId} update request`)
+
         const result = await Logger.wrap(
             rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Chain: chain ${this.chainId} update request failure`,
@@ -187,9 +197,11 @@ export class Chain {
         if (!url) return null
     
         // attempt to get the height, wrap with Logger
-        Logger.detail(`Chain: getting height of chain ${this.chainId}`)
         rlb.delay = await Cache.get('evmRlbDelay')
         rlb.lim = await Cache.get('evmRlbLim')
+
+        await Logger.detail(`Chain: sending request for height of chain ${this.chainId}`)
+
         const height = await Logger.wrap(
             ejra.methods.height({ url, rlb }),
             `Chain: failed to retrieve chain ${this.chainId} height`,
@@ -204,38 +216,56 @@ export class Chain {
 
     async logs():Promise<ejra.types.Log[]|null|false> {
 
+        console.log('0')
+
         // get the url for this chain and machine
         const url = await this.url()
+
+        console.log('1')
         
         // if this fails, return null
         if (url === undefined) {
-            Logger.warn(`Chain: chain ${this.chainId} url not set`)
+            await Logger.warn(`Chain: chain ${this.chainId} url not set`)
             return null
         }
+
+        console.log('2')
+
         if (url === null) {
-            Logger.warn(`Chain: chain ${this.chainId} url retrieval failure`)
+            await Logger.warn(`Chain: chain ${this.chainId} url retrieval failure`)
             return null
         }
+
+        console.log('3')
 
         // get the filter for this chain and machine
         const filter = await this.filter()
 
+        console.log('4')
+
         // return null if above fails
         if (filter === null) {
-            Logger.warn(`Chain: chain ${this.chainId} filter indeterminate`)
+            await Logger.warn(`Chain: chain ${this.chainId} filter indeterminate`)
             return null
         }
 
+        console.log('5')
+
         // return false if filter width < 1
         if (filter.width < 1n) {
-            Logger.info(`Chain: chain ${this.chainId} no new blocks (width ${filter.width}) ${JSON.stringify(filter, replacer)}`)
+            await Logger.info(`Chain: chain ${this.chainId} no new blocks (width ${filter.width}) ${JSON.stringify(filter, replacer)}`)
             return false
         }
+
+        console.log('6')
     
         // attempt to get the burn logs, wrap with Logger
-        Logger.info(`Chain: chain ${this.chainId} getting logs with filter (width ${filter.width}) ${JSON.stringify(filter, replacer)}`)
+
         rlb.delay = await Cache.get('evmRlbDelay')
         rlb.lim = await Cache.get('evmRlbLim')
+
+        await Logger.info(`Chain: chain ${this.chainId} requesting logs with filter (width ${filter.width}) ${JSON.stringify(filter, replacer)}`)
+
         const logs = await Logger.wrap(
             ejra.methods.logs({
                 url, rlb,
@@ -250,13 +280,21 @@ export class Chain {
             `Chain: successfully retrieved chain ${this.chainId} height`
         )
 
+        console.log('7')
+
         // if above request fails, bisect the filter and update it
         if (logs === null) filter.bisect()
+
+        console.log('8')
 
         // if the above request succeeds, bump the filter (move it forward)
         if (logs) filter.bump()
 
+        console.log('9')
+
         await filter.update(this)
+
+        console.log('10')
 
         // return logs or null if above fails
         return logs

@@ -10,11 +10,11 @@ export function kvIterate<T>(prefix:Deno.KvKey)
     const list = kv.list<T>({ prefix })
 
     async function next():Promise<IteratorResult<Deno.KvEntry<T>>> {
-
-        await Logger.detail(`kvIterate: prefix [${prefix}] start`)
         
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+
+        await Logger.detail(`kvIterate: prefix [${prefix}] start`)
 
         const result = await Logger.wrap(
             rlb.regulate({ fn: list.next.bind(list), args: [] }),
@@ -24,7 +24,7 @@ export function kvIterate<T>(prefix:Deno.KvKey)
         )
 
         if (result?.done)
-            Logger.detail(
+            await Logger.detail(
                 `kvIterate: prefix [${prefix}] done, count ${counter.value}`
             )
 

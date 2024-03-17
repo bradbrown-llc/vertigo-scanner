@@ -40,9 +40,12 @@ export class Filter {
             .commit
         
         // attempt the commit
-        Logger.detail(`Filter: chain ${chain.chainId} update request`)
+
         rlb.delay = await Cache.get('kvRlbDelay')
         rlb.lim = await Cache.get('kvRlbLim')
+
+        await Logger.detail(`Filter: sending chain ${chain.chainId} update request`)
+
         const result = await Logger.wrap(
             rlb.regulate({ fn: commit.bind(atom), args: [] }),
             `Filter: chain ${chain.chainId} update request failure`,
