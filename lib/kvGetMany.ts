@@ -1,15 +1,14 @@
-import { LogLevel } from '../types/mod.ts'
-import { Logger, Cache } from '../classes/mod.ts'
-import { kv, kvRlb as rlb } from './mod.ts'
+import { LogLevel } from 'https://deno.land/x/vertigo@0.0.3/types/mod.ts'
+import { Logger, Cache } from 'https://deno.land/x/vertigo@0.0.3/classes/mod.ts'
+import { kv, kvRlb as rlb } from 'https://deno.land/x/vertigo@0.0.3/lib/mod.ts'
 
-export async  function kvGetMany<
+export async function kvGetMany<
     T extends readonly unknown[]
 >(
     keys: { [P in keyof T]: Deno.KvKey } 
 ):Promise<null|{ [P in keyof T]: T[P]|undefined }> {
 
     const getMany = kv.getMany<T>
-
     
     rlb.delay = await Cache.get('kvRlbDelay')
     rlb.lim = await Cache.get('kvRlbLim')

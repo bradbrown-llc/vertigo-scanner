@@ -1,4 +1,4 @@
-import { kv } from '../lib/mod.ts'
+import { kv } from 'https://deno.land/x/vertigo@0.0.3/lib/mod.ts'
 
 const list = kv.list<unknown>({ prefix: [] })
 

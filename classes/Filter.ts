@@ -1,6 +1,6 @@
-import { KvFilter, LogLevel } from '../types/mod.ts'
-import { Chain, Logger, Cache } from './mod.ts'
-import { kv, kvGet, kvRlb as rlb, machineId } from '../lib/mod.ts'
+import { KvFilter, LogLevel } from 'https://deno.land/x/vertigo@0.0.3/types/mod.ts'
+import { Chain, Logger, Cache } from 'https://deno.land/x/vertigo@0.0.3/classes/mod.ts'
+import { kv, kvGet, kvRlb as rlb, machineId } from 'https://deno.land/x/vertigo@0.0.3/lib/mod.ts'
 
 export class Filter {
 

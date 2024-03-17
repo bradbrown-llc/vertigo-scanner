@@ -1,5 +1,5 @@
-import { KvCacheEntry } from '../types/mod.ts'
-import { kv, machineId } from '../lib/mod.ts'
+import { KvCacheEntry } from 'https://deno.land/x/vertigo@0.0.3/types/mod.ts'
+import { kv, machineId } from 'https://deno.land/x/vertigo@0.0.3/lib/mod.ts'
 
 kv.set(['delay', machineId], { value: 500, expireIn: 1000 } as KvCacheEntry<number>)
 kv.set(['kvRlbDelay', machineId], { value: 50, expireIn: 1000 } as KvCacheEntry<number>)

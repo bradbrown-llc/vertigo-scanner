@@ -1,6 +1,6 @@
-import { LogLevel } from './types/mod.ts'
-import { Logger, Chain, Burn, Cache } from './classes/mod.ts'
-import { sleep } from './lib/mod.ts'
+import { LogLevel } from 'https://deno.land/x/vertigo@0.0.3/types/mod.ts'
+import { Logger, Chain, Burn, Cache } from 'https://deno.land/x/vertigo@0.0.3/classes/mod.ts'
+import { sleep } from 'https://deno.land/x/vertigo@0.0.3/lib/mod.ts'
 
 Cache.set('level', LogLevel.DETAIL)
 
