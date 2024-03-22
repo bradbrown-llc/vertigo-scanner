@@ -1,58 +1,35 @@
-import { LogLevel } from 'https://deno.land/x/vertigo@0.0.3/types/mod.ts'
-import { Logger, Chain, Burn, Cache } from 'https://deno.land/x/vertigo@0.0.3/classes/mod.ts'
-import { sleep } from 'https://deno.land/x/vertigo@0.0.3/lib/mod.ts'
+import { Chain } from '../vertigo/lib/Chain.ts'
+import { Burn } from '../vertigo/lib/Burn.ts'
+import { kvv } from './lib/kvv.ts'
+import { ejra } from './lib/ejra.ts'
+import { processId } from './lib/processId.ts'
+import { tokenAddress } from './lib/tokenAddress.ts'
+import { burnTopics } from './lib/burnTopics.ts'
+import { err } from './lib/err.ts'
+import { out } from './lib/out.ts'
 
-Cache.set('level', LogLevel.DETAIL)
+async function handleBurn(burn:Burn) {
+    const active = await burn.destinationActive()
+    const state = await burn.state()
+    if (state === null && active === true) await burn.move('finalizable')
+    if (state === null && active === false) await burn.move('archive')
+    await burn.unclaim(processId)
+}
 
 while (true) {
 
-    const delay = await Cache.get('delay')
-    await Logger.info(`scan: sleeping for ${delay / 1000}s`)
-    await sleep(delay)
+    const processing = await Burn.nextProcessing(processId, kvv, ejra, { err, out })
+    if (processing instanceof Burn) { await handleBurn(processing); continue }
 
-    // get stalest chain or continue
-    const chain = await Chain.stalest()
-    if (!chain) { await Logger.warn('scan: no chains found'); continue }
-    await Logger.info(`scan: picked chain ${chain.chainId}`)
-
-    // get logs or continue
-    const logs = await chain.logs()
-    if (!logs) continue
-    await Logger.info(`scan: chain ${chain.chainId} ${logs.length} logs found`)
-
-    // for each log
-    logs.forEach(async log => {
-
-        // create a burn
-        const burn = new Burn({ chain, log })
-
-        // try to claim the burn, return
-        if (!await burn.claim()) {
-            await Logger.info(`scan: unable to claim burn ${burn.id}`)
-            return
-        }
-        await Logger.info(`scan: claimed burn ${burn.id}`)
-
-        // check if the burn's destination chain is active
-        const active = await burn.destination.active()
-        
-        // if it isn't, archive the burn
-        if (active === false) {
-            await burn.set('archive')
-            await Logger.info(`scan: set burn ${burn.id} archive`)
-        }
-
-        // if it is, mark the burn as finalizable
-        if (active === true) {
-            await burn.set('finalizable')
-            await Logger.info(`scan: set burn ${burn.id} finalizable`)
-        }
-
-        // unclaim the burn
-        const unclaim = await burn.unclaim()
-        if (!unclaim) await Logger.warn(`scan: unclaim request for ${burn.id} failed`)
-        else await Logger.info(`scan: unclaimed burn ${burn.id}`)
-
-    })
+    const chain = await Chain.stalest(kvv, ejra, { err, out })
+    if (chain === null) continue
+    const logs = await chain.logs(tokenAddress, burnTopics, processId)
+    if (logs instanceof Error) continue
+    for (const log of logs) {
+        const burn = Burn.fromEvent(chain, log, { err, out })
+        const claimed = await burn.claim(processId)
+        if (!claimed || claimed instanceof Error) continue
+        await handleBurn(burn)
+    }
 
 }
