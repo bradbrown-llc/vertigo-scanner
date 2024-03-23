@@ -1,5 +1,5 @@
-import { Chain } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/vertigo@0.0.5/lib/Chain.ts'
-import { Burn } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/vertigo@0.0.5/lib/Burn.ts'
+import { Chain } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/vertigo@0.0.6/lib/Chain.ts'
+import { Burn } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/vertigo@0.0.6/lib/Burn.ts'
 import { kvv } from './lib/kvv.ts'
 import { ejra } from './lib/ejra.ts'
 import { processId } from './lib/processId.ts'
