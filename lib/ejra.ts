@@ -2,9 +2,11 @@ import { Fallbacks, KvCache } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/kv
 import { Ejra } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/ejra@0.4.3-vertigo/mod.ts'
 import { Toad } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/toad@0.0.6-vertigo/mod.ts'
 import { kvv } from './kvv.ts'
-import { processId } from './processId.ts'
+import { config } from '../config.ts'
 
-const key:Deno.KvKey = ['delay', 'ejra', processId] 
+const { process } = config
+
+const key:Deno.KvKey = ['delay', 'ejra', process] 
 
 const fallbacks:Fallbacks<number> = { value: 500, expireIn: 30000 }
 

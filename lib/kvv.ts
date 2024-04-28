@@ -1,13 +1,15 @@
 import { Fallbacks } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/kvcache@0.0.2-vertigo/mod.ts'
 import { KvVertigo } from 'https://cdn.jsdelivr.net/gh/bradbrown-llc/kvvertigo@0.0.2/mod.ts'
-import { processId } from './processId.ts'
+import { config } from '../config.ts'
+
+const { process } = config
 
 const kvPath = Deno.env.get('DENO_KV_PATH')
 if (!kvPath) throw new Error('missing required env var \'DENO_KV_PATH\'')
 
 const kv = await Deno.openKv(kvPath)
 
-const key:Deno.KvKey = ['delay', 'kvv', processId]
+const key:Deno.KvKey = ['delay', 'kvv', process]
 const fallbacks:Fallbacks<number> = { value: 250, expireIn: 30000 }
 
 const kvv = new KvVertigo(kv, key, fallbacks)
